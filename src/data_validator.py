@@ -1,6 +1,5 @@
 # src/data_validator.py
 import logging
-import re
 import pandas as pd
 
 
@@ -31,9 +30,9 @@ def validate_dataframe(df, required_columns, numeric_columns):
                 try:
                     float(value)
                 except ValueError:
-                    # TODO: Log a warning and record this row's index.
+                    # Log a warning and record this row's index.
                     invalid_rows.append(i)
-        # TODO: Remove the invalid rows.
+        # Remove the invalid rows.
         if invalid_rows:
             logger.warning(f"Removed {len(invalid_rows)} rows with invalid numeric values from column '{col}'")
         df = df.drop(index=invalid_rows)

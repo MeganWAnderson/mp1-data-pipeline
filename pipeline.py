@@ -11,26 +11,20 @@ Usage:
 import argparse
 import logging
 import sys
-from pathlib import Path
 
 # Import Functions from Other Scripts 
-from data_loaders import load_data
-from data_processor import process_data, create_cleaning_report
+from src import (
+    create_cleaning_report,
+    load_data,
+    process_data,
+    save_data,
+    setup_logging,
+    validate_dataframe,
+    validate_input,
+)
+
 
 logger = logging.getLogger(__name__)
-
-
-def setup_logging(verbose=False):
-    """Configure logging for the pipeline."""
-    # use logging.DEBUG when verbose is True 
-    # use logging.INFO when verbose is False 
-    # include time, log level, and messagge in each log entry
-    level = logging.DEBUG if verbose else logging.INFO
-    logging.basicConfig(
-        level=level,
-        format="%(asctime)s %(levelname)-8s %(name)s — %(message)s",
-        datefmt="%H:%M:%S"
-    )
 
 
 def parse_arguments():
@@ -41,19 +35,6 @@ def parse_arguments():
     parser.add_argument("--output", "-o", required=True, help="Output file path")
     parser.add_argument("--verbose", "-v", action="store_true", help="Enable verbose logging")
     return parser.parse_args()
-
-
-def validate_input(filepath):
-    """Check whether the input path exists and is a file."""
-    path = Path(filepath)
-    if not path.exists():
-        logger.error(f"Input file does not exist: {filepath}")
-        return False
-    if not path.is_file():
-        logger.error(f"Input path is not a file: {filepath}")
-        return False
-    logger.info(f"Input file validated: {filepath}")
-    return True 
 
 
 def main():
@@ -71,27 +52,37 @@ def main():
     if not validate_input(args.config):
         sys.exit(1)
 
-    try: 
+    try:
         data = load_data(args.input)
         config = load_data(args.config)
     except ValueError as e:
         logger.error(f"Failed to load input or configuration: {e}")
         sys.exit(1)
 
-    df_before = data.copy()
+    validation = config.get("validation", {})
+    required_columns = validation.get("required_columns", [])
+    numeric_columns = validation.get("numeric_columns", [])
+
+    rows_before_validation = len(data)
     try:
-        df_after = process_data(data, config)
+        df_valid = validate_dataframe(data, required_columns, numeric_columns)
+    except ValueError as e:
+        logger.error(f"Validation failed: {e}")
+        sys.exit(1)
+    logger.info(f"Validation complete: {rows_before_validation} --> {len(df_valid)} rows")
+
+    try:
+        df_after = process_data(df_valid, config)
     except ValueError as e:
         logger.error(f"Failed to process data: {e}")
         sys.exit(1)
 
-    report = create_cleaning_report(df_before, df_after)
+    report = create_cleaning_report(df_valid, df_after)
+    logger.info(f"Processing complete: {len(df_valid)} --> {len(df_after)} rows")
+
+    output_path = save_data(df_after, args.output)
+    logger.info(f"Saved cleaned data to {output_path}")
     print(f"Cleaning report: {report}")
-    logger.info(f"Processing complete: {len(df_before)} --> {len(df_after)} rows")
-
-    df_after.to_csv(args.output, index=False)
-    logger.info(f"Saved cleaned data to {args.output}")
-
 
 
 if __name__ == "__main__":
